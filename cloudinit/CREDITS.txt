@@ -1,0 +1,1 @@
+https://dev.to/sciabarracom/deploy-a-microk8s-cluster-with-cloud-init-45l7

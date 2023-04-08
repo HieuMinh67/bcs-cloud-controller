@@ -1,0 +1,1 @@
+ami_tags = { Name = "MicroK8s" }
