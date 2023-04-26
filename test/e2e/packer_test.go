@@ -5,6 +5,8 @@ import (
 	"github.com/aws/aws-sdk-go/aws/awserr"
 	"github.com/gruntwork-io/terratest/modules/logger"
 	"github.com/gruntwork-io/terratest/modules/packer"
+	"github.com/gruntwork-io/terratest/modules/retry"
+	"github.com/gruntwork-io/terratest/modules/ssh"
 	test_structure "github.com/gruntwork-io/terratest/modules/test-structure"
 	"github.com/stretchr/testify/assert"
 	"os"
@@ -20,6 +22,7 @@ import (
 // Occasionally, a Packer build may fail due to intermittent issues (e.g., brief network outage or EC2 issue). We try
 // to make our tests resilient to that by specifying those known common errors here and telling our builds to retry if
 // they hit those errors.
+var KeyPairName = "terratest-ssh-example"
 var DefaultRetryablePackerErrors = map[string]string{
 	"Script disconnected unexpectedly":                                                 "Occasionally, Packer seems to lose connectivity to AWS, perhaps due to a brief network outage",
 	"can not open /var/lib/apt/lists/archive.ubuntu.com_ubuntu_dists_xenial_InRelease": "Occasionally, apt-get fails on ubuntu to update the cache",
@@ -46,6 +49,12 @@ func TestImageBuildForAwsUbuntuMicroK8s(t *testing.T) {
 		deleteAMI(t, awsRegion, workingDir)
 	})
 
+	// At the end of the test, run `terraform destroy` to clean up any resources that were created
+	defer test_structure.RunTestStage(t, "teardown", func() {
+		keyPair := test_structure.LoadEc2KeyPair(t, workingDir)
+		terratest_aws.DeleteEC2KeyPair(t, keyPair)
+	})
+
 	// At the end of the test, undeploy the web app using Terraform
 	//defer test_structure.RunTestStage(t, "cleanup_terraform", func() {
 	//	undeployUsingTerraform(t, workingDir)
@@ -70,6 +79,8 @@ func TestImageBuildForAwsUbuntuMicroK8s(t *testing.T) {
 	// Create a new instance
 	test_structure.RunTestStage(t, "create_instance", func() {
 		awsRegion := test_structure.LoadString(t, workingDir, "awsRegion")
+		keyPair := terratest_aws.CreateAndImportEC2KeyPair(t, awsRegion, KeyPairName)
+		test_structure.SaveEc2KeyPair(t, workingDir, keyPair)
 		createEc2Instance(t, awsRegion, workingDir)
 	})
 
@@ -90,7 +101,7 @@ func buildAMI(t *testing.T, awsRegion string, workingDir string) {
 		// The path to where the Packer template is located
 		Template: "../../packer/aws-ubuntu.pkr.hcl",
 
-		// Variable file to to pass to our Packer build using -var-file option
+		// Variable file to pass to our Packer build using -var-file option
 		VarFiles: []string{
 			//varFile.Name(),
 			"../../packer/aws-ubuntu.auto.pkrvars.hcl",
@@ -349,6 +360,7 @@ func createEc2Instance(t *testing.T, awsRegion string, workingDir string) {
 			MaxCount:         aws.Int64(1),
 			SecurityGroupIds: []*string{securityGroupRes.GroupId},
 			SubnetId:         aws.String(subnetId),
+			KeyName:          aws.String(KeyPairName),
 		})
 
 	if err != nil {
@@ -376,8 +388,37 @@ func createEc2Instance(t *testing.T, awsRegion string, workingDir string) {
 	}
 
 	fmt.Println("Successfully tagged instance")
-	test_structure.SaveString(t, workingDir, "InstanceId", *instanceId)
+	test_structure.SaveString(t, workingDir, "instanceId", *instanceId)
 
+	keyPair := test_structure.LoadEc2KeyPair(t, workingDir)
+	publicInstanceIP := *instanceRes.Instances[0].PublicIpAddress
+	fmt.Printf("Public IP: %s\n", publicInstanceIP)
+	publicHost := ssh.Host{
+		Hostname:    publicInstanceIP,
+		SshKeyPair:  keyPair.KeyPair,
+		SshUserName: "ubuntu",
+	}
+
+	// It can take a minute or so for the Instance to boot up, so retry a few times
+	maxRetries := 30
+	timeBetweenRetries := 5 * time.Second
+	description := fmt.Sprintf("SSH to public host %s", publicInstanceIP)
+
+	command := "microk8s version"
+	// Verify that we can SSH to the Instance and run commands
+	retry.DoWithRetry(t, description, maxRetries, timeBetweenRetries, func() (string, error) {
+		actualText, err := ssh.CheckSshCommandE(t, publicHost, command)
+
+		if err != nil {
+			return "", err
+		}
+
+		fmt.Println(actualText)
+		expected := "MicroK8s"
+		assert.Contains(t, actualText, expected)
+
+		return "", nil
+	})
 }
 
 // Delete the AMI
@@ -453,6 +494,7 @@ func validateInstanceRunningKubernetes(t *testing.T, awsRegion string, workingDi
 
 	// Verify that we get back a 200 OK with the expected instanceText
 	//http_helper.HttpGetWithRetry(t, instanceURL, &tlsConfig, 200, "", maxRetries, timeBetweenRetries)
+
 }
 
 // An example of how to test the Packer template in examples/packer-basic-example using Terratest
