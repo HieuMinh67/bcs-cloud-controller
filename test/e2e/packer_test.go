@@ -183,7 +183,8 @@ func createEc2Instance(t *testing.T, awsRegion string, workingDir string) {
 
 	fmt.Println(vpcsRes)
 
-	var vpcId, subnetId string
+	groupName := "my-security-groupV3"
+	var vpcId, subnetId, groupId string
 	if len(vpcsRes.Vpcs) == 0 {
 		println("VPC not exist so create a new one")
 		vpcTag := &ec2.TagSpecification{
@@ -241,6 +242,79 @@ func createEc2Instance(t *testing.T, awsRegion string, workingDir string) {
 
 		//fmt.Println(vpcRes)
 		subnetId = *createSubnetRes.Subnet.SubnetId
+
+		// https://docs.aws.amazon.com/sdk-for-go/api/service/ec2/#EC2.CreateSecurityGroup
+		// https://docs.aws.amazon.com/sdk-for-go/v1/developer-guide/ec2-example-security-groups.html#create-security-group
+		sgTag := &ec2.TagSpecification{
+			ResourceType: aws.String(ec2.ResourceTypeSecurityGroup),
+			Tags: []*ec2.Tag{
+				{
+					Key:   aws.String("Name"),
+					Value: aws.String("My security group V3"),
+				},
+			},
+		}
+		sgInput := &ec2.CreateSecurityGroupInput{
+			Description:       aws.String("My security group"),
+			GroupName:         aws.String(groupName),
+			TagSpecifications: []*ec2.TagSpecification{sgTag},
+			VpcId:             aws.String(vpcId),
+		}
+
+		securityGroupRes, err := ec2Client.CreateSecurityGroup(sgInput)
+		if err != nil {
+			if awsErr, ok := err.(awserr.Error); ok {
+				switch awsErr.Code() {
+				default:
+					fmt.Println(awsErr.Error())
+				}
+			} else {
+				// Print the error, cast err to awserr.Error to get the Code and
+				// Message from an error.
+				fmt.Println(err.Error())
+			}
+			return
+		}
+
+		fmt.Println(securityGroupRes)
+		groupId = *securityGroupRes.GroupId
+
+		_, err = ec2Client.AuthorizeSecurityGroupIngress(&ec2.AuthorizeSecurityGroupIngressInput{
+			GroupId: aws.String(groupId),
+
+			IpPermissions: []*ec2.IpPermission{
+				// Can use setters to simplify seting multiple values without the
+				// needing to use aws.String or associated helper utilities.
+				(&ec2.IpPermission{}).
+					SetIpProtocol("tcp").
+					SetFromPort(80).
+					SetToPort(80).
+					SetIpRanges([]*ec2.IpRange{
+						{CidrIp: aws.String("0.0.0.0/0")},
+					}),
+				(&ec2.IpPermission{}).
+					SetIpProtocol("tcp").
+					SetFromPort(16443).
+					SetToPort(16443).
+					SetIpRanges([]*ec2.IpRange{
+						{CidrIp: aws.String("0.0.0.0/0")},
+					}),
+				(&ec2.IpPermission{}).
+					SetIpProtocol("tcp").
+					SetFromPort(22).
+					SetToPort(22).
+					SetIpRanges([]*ec2.IpRange{
+						(&ec2.IpRange{}).
+							SetCidrIp("0.0.0.0/0"),
+					}),
+			},
+		})
+		if err != nil {
+			fmt.Printf("Unable to set security group %q ingress, %v", groupName, err)
+			os.Exit(1)
+		}
+
+		fmt.Println("Successfully set security group ingress")
 	} else {
 		println("Reuse existing VPC")
 		vpcId = *vpcsRes.Vpcs[0].VpcId
@@ -272,95 +346,59 @@ func createEc2Instance(t *testing.T, awsRegion string, workingDir string) {
 		}
 
 		subnetId = *subnetsRes.Subnets[0].SubnetId
+
+		sgRes, err := ec2Client.DescribeSecurityGroups(&ec2.DescribeSecurityGroupsInput{
+			Filters: []*ec2.Filter{
+				{
+					Name: aws.String("vpc-id"),
+					Values: []*string{
+						aws.String(vpcId),
+					},
+				},
+				{
+					Name: aws.String("group-name"),
+					Values: []*string{
+						aws.String(groupName),
+					},
+				},
+			},
+		})
+		if err != nil {
+			if aerr, ok := err.(awserr.Error); ok {
+				switch aerr.Code() {
+				default:
+					fmt.Println(aerr.Error())
+				}
+			} else {
+				// Print the error, cast err to awserr.Error to get the Code and
+				// Message from an error.
+				fmt.Println(err.Error())
+			}
+			return
+		}
+		groupId = *sgRes.SecurityGroups[0].GroupId
 	}
 
 	println("VPC ID to use is " + vpcId)
-
-	// https://docs.aws.amazon.com/sdk-for-go/api/service/ec2/#EC2.CreateSecurityGroup
-	// https://docs.aws.amazon.com/sdk-for-go/v1/developer-guide/ec2-example-security-groups.html#create-security-group
-	sgTag := &ec2.TagSpecification{
-		ResourceType: aws.String(ec2.ResourceTypeSecurityGroup),
-		Tags: []*ec2.Tag{
-			{
-				Key:   aws.String("Name"),
-				Value: aws.String("My security group V3"),
-			},
-		},
-	}
-	groupName := "my-security-groupV3"
-	sgInput := &ec2.CreateSecurityGroupInput{
-		Description:       aws.String("My security group"),
-		GroupName:         aws.String(groupName),
-		TagSpecifications: []*ec2.TagSpecification{sgTag},
-		VpcId:             aws.String(vpcId),
-	}
-
-	securityGroupRes, err := ec2Client.CreateSecurityGroup(sgInput)
-	if err != nil {
-		if awsErr, ok := err.(awserr.Error); ok {
-			switch awsErr.Code() {
-			default:
-				fmt.Println(awsErr.Error())
-			}
-		} else {
-			// Print the error, cast err to awserr.Error to get the Code and
-			// Message from an error.
-			fmt.Println(err.Error())
-		}
-		return
-	}
-
-	fmt.Println(securityGroupRes)
-	groupId := *securityGroupRes.GroupId
-
-	_, err = ec2Client.AuthorizeSecurityGroupIngress(&ec2.AuthorizeSecurityGroupIngressInput{
-		GroupId: aws.String(groupId),
-
-		IpPermissions: []*ec2.IpPermission{
-			// Can use setters to simplify seting multiple values without the
-			// needing to use aws.String or associated helper utilities.
-			(&ec2.IpPermission{}).
-				SetIpProtocol("tcp").
-				SetFromPort(80).
-				SetToPort(80).
-				SetIpRanges([]*ec2.IpRange{
-					{CidrIp: aws.String("0.0.0.0/0")},
-				}),
-			(&ec2.IpPermission{}).
-				SetIpProtocol("tcp").
-				SetFromPort(16443).
-				SetToPort(16443).
-				SetIpRanges([]*ec2.IpRange{
-					{CidrIp: aws.String("0.0.0.0/0")},
-				}),
-			(&ec2.IpPermission{}).
-				SetIpProtocol("tcp").
-				SetFromPort(22).
-				SetToPort(22).
-				SetIpRanges([]*ec2.IpRange{
-					(&ec2.IpRange{}).
-						SetCidrIp("0.0.0.0/0"),
-				}),
-		},
-	})
-	if err != nil {
-		fmt.Printf("Unable to set security group %q ingress, %v", groupName, err)
-		os.Exit(1)
-	}
-
-	fmt.Println("Successfully set security group ingress")
 
 	// https://docs.aws.amazon.com/sdk-for-go/v1/developer-guide/ec2-example-create-images.html
 	instanceRes, err := ec2Client.RunInstances(
 		&ec2.RunInstancesInput{
 			// An Amazon Linux AMI ID for t2.micro instances in the us-west-2 region
-			ImageId:          aws.String(amiId),
-			InstanceType:     aws.String("t4g.micro"),
-			MinCount:         aws.Int64(1),
-			MaxCount:         aws.Int64(1),
-			SecurityGroupIds: []*string{securityGroupRes.GroupId},
-			SubnetId:         aws.String(subnetId),
-			KeyName:          aws.String(KeyPairName),
+			ImageId:      aws.String(amiId),
+			InstanceType: aws.String("t4g.micro"),
+			MinCount:     aws.Int64(1),
+			MaxCount:     aws.Int64(1),
+			KeyName:      aws.String(KeyPairName),
+			NetworkInterfaces: []*ec2.InstanceNetworkInterfaceSpecification{
+				{
+					AssociatePublicIpAddress: aws.Bool(true),
+					DeleteOnTermination:      aws.Bool(true),
+					DeviceIndex:              aws.Int64(0),
+					SubnetId:                 aws.String(subnetId),
+					Groups:                   []*string{&groupId},
+				},
+			},
 		})
 
 	if err != nil {
@@ -389,36 +427,6 @@ func createEc2Instance(t *testing.T, awsRegion string, workingDir string) {
 
 	fmt.Println("Successfully tagged instance")
 	test_structure.SaveString(t, workingDir, "instanceId", *instanceId)
-
-	keyPair := test_structure.LoadEc2KeyPair(t, workingDir)
-	publicInstanceIP := *instanceRes.Instances[0].PublicIpAddress
-	fmt.Printf("Public IP: %s\n", publicInstanceIP)
-	publicHost := ssh.Host{
-		Hostname:    publicInstanceIP,
-		SshKeyPair:  keyPair.KeyPair,
-		SshUserName: "ubuntu",
-	}
-
-	// It can take a minute or so for the Instance to boot up, so retry a few times
-	maxRetries := 30
-	timeBetweenRetries := 5 * time.Second
-	description := fmt.Sprintf("SSH to public host %s", publicInstanceIP)
-
-	command := "microk8s version"
-	// Verify that we can SSH to the Instance and run commands
-	retry.DoWithRetry(t, description, maxRetries, timeBetweenRetries, func() (string, error) {
-		actualText, err := ssh.CheckSshCommandE(t, publicHost, command)
-
-		if err != nil {
-			return "", err
-		}
-
-		fmt.Println(actualText)
-		expected := "MicroK8s"
-		assert.Contains(t, actualText, expected)
-
-		return "", nil
-	})
 }
 
 // Delete the AMI
@@ -472,28 +480,39 @@ func validateInstanceRunningKubernetes(t *testing.T, awsRegion string, workingDi
 	}
 
 	fmt.Println(result)
-	//publicIpAddress := result.Reservations[0].Instances[0].PublicIpAddress
+	publicIpAddress := result.Reservations[0].Instances[0].PublicIpAddress
 
 	fmt.Printf("instanceId is %s \n", instanceId)
-	//fmt.Printf("publicIpAddress is %s \n", *publicIpAddress)
+	fmt.Printf("publicIpAddress is %s \n", *publicIpAddress)
 
-	// Run `terraform output` to get the value of an output variable
-	//instanceURL := terraform.Output(t, terraformOptions, "instance_url")
-
-	//instanceURL := "http://localhost"
-
-	// Setup a TLS configuration to submit with the helper, a blank struct is acceptable
-	//tlsConfig := tls.Config{}
-
-	// Figure out what text the instance should return for each request
-	//instanceText, _ := terraformOptions.Vars["instance_text"].(string)
+	keyPair := test_structure.LoadEc2KeyPair(t, workingDir)
+	fmt.Printf("Public IP: %s\n", *publicIpAddress)
+	publicHost := ssh.Host{
+		Hostname:    *publicIpAddress,
+		SshKeyPair:  keyPair.KeyPair,
+		SshUserName: "ubuntu",
+	}
 
 	// It can take a minute or so for the Instance to boot up, so retry a few times
-	//maxRetries := 3
-	//timeBetweenRetries := 5 * time.Second
+	maxRetries := 30
+	timeBetweenRetries := 5 * time.Second
+	description := fmt.Sprintf("SSH to public host %s", *publicIpAddress)
 
-	// Verify that we get back a 200 OK with the expected instanceText
-	//http_helper.HttpGetWithRetry(t, instanceURL, &tlsConfig, 200, "", maxRetries, timeBetweenRetries)
+	command := "microk8s version"
+	// Verify that we can SSH to the Instance and run commands
+	retry.DoWithRetry(t, description, maxRetries, timeBetweenRetries, func() (string, error) {
+		actualText, err := ssh.CheckSshCommandE(t, publicHost, command)
+
+		if err != nil {
+			return "", err
+		}
+
+		fmt.Println(actualText)
+		expected := "MicroK8s"
+		assert.Contains(t, actualText, expected)
+
+		return "", nil
+	})
 
 }
 
