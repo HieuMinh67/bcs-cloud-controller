@@ -3,6 +3,7 @@ package e2e
 import (
 	"fmt"
 	"github.com/aws/aws-sdk-go/aws/awserr"
+	"github.com/beancloudservices/bcs-cloud-controller/test/setup/networking"
 	"github.com/gruntwork-io/terratest/modules/logger"
 	"github.com/gruntwork-io/terratest/modules/packer"
 	test_structure "github.com/gruntwork-io/terratest/modules/test-structure"
@@ -27,6 +28,8 @@ var DefaultRetryablePackerErrors = map[string]string{
 var DefaultTimeBetweenPackerRetries = 15 * time.Second
 
 const DefaultMaxPackerRetries = 3
+
+const DefaultRegion string = "us-west-2"
 
 var log = logger.Logger{}
 
@@ -85,6 +88,12 @@ func TestImageBuildForAwsUbuntuMicroK8s(t *testing.T) {
 func buildAMI(t *testing.T, awsRegion string, workingDir string) {
 	// Some AWS regions are missing certain instance types, so pick an available type based on the region we picked
 	//instanceType := terratest_aws.GetRecommendedInstanceType(t, awsRegion, []string{"t4g.micro"})
+
+	vpc := networking.VPC{
+		TestObject: t,
+		AwsRegion:  DefaultRegion,
+	}
+	vpc.CreateDefaultVPCIfNotExists()
 
 	packerOptions := &packer.Options{
 		// The path to where the Packer template is located
