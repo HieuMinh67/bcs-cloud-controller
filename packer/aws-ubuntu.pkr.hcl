@@ -85,4 +85,12 @@ build {
   sources = [
     "source.amazon-ebs.ubuntu"
   ]
+
+  provisioner "shell" {
+    inline = [
+      "sudo snap install microk8s --classic",
+      "sudo usermod -a -G microk8s $USER",
+#      "sudo chown -f -R $USER ~/.kube",
+    ]
+  }
 }

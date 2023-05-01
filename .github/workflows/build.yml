@@ -1,27 +1,28 @@
 name: Packer Build
 
 on:
-  push:
-    branches:
-      - master
+  workflow_run:
+    workflows: [ Run Tests ]
+    types: [ completed ]
+    branches: [ master ]
   workflow_dispatch:
 
 jobs:
   branch:
     name: Get branch name
-    run-on: ubuntu-latest
+    runs-on: ubuntu-latest
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v3
-      - name: Branch check
-        id: branch-check
+      - uses: actions/checkout@v3
+      - id: branch-check
         run: |
           echo "Running on branch ${{ github.ref }}"
-          if [ "${{ github.ref }}" = "refs/heads/master" ]; then
-            echo "::set-output name=env_name::production"
+          if [ "${{ github.ref }}" == "refs/heads/master" ]; then
+            echo "env_name=production" >> $GITHUB_OUTPUT
           else
-             echo "::set-output name=env_name::sandbox"
+             echo "env_name=sandbox" >> $GITHUB_OUTPUT
           fi
+    outputs:
+      env_name: ${{ steps.branch-check.outputs.env_name }}
   packer:
     name: Packer Build
     needs: [branch]
@@ -30,6 +31,16 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
+
+      - name: Branch check
+        id: branch-check
+        run: |
+          echo "Running on branch ${{ github.ref }}"
+          if [ "${{ github.ref }}" = "refs/heads/master" ]; then
+            echo "env_name=production" >> $GITHUB_OUTPUT
+          else
+             echo "env_name=sandbox" >> $GITHUB_OUTPUT
+          fi
 
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v1
