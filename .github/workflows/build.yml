@@ -1,12 +1,32 @@
-name: Packer Build development
+name: Packer Build
 
-on: workflow_dispatch
+on:
+  push:
+    branches:
+      - master
+  workflow_dispatch:
 
 jobs:
+  branch:
+    name: Get branch name
+    run-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+      - name: Branch check
+        id: branch-check
+        run: |
+          echo "Running on branch ${{ github.ref }}"
+          if [ "${{ github.ref }}" = "refs/heads/master" ]; then
+            echo "::set-output name=env_name::production"
+          else
+             echo "::set-output name=env_name::sandbox"
+          fi
   packer:
     name: Packer Build
+    needs: [branch]
     runs-on: ubuntu-latest
-    environment: sandbox
+    environment: ${{ needs.branch.outputs.env_name }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
