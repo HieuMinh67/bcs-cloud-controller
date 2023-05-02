@@ -24,6 +24,7 @@ jobs:
       env_name: ${{ steps.branch-check.outputs.env_name }}
   run-test:
     needs: [branch]
+    environment: ${{ needs.branch.outputs.env_name }}
     runs-on: ubuntu-latest
     steps:
       - uses: peter-evans/repository-dispatch@v2
