@@ -9,7 +9,6 @@ on:
 jobs:
   branch:
     name: Get branch name
-    needs: [test]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
@@ -23,6 +22,14 @@ jobs:
           fi
     outputs:
       env_name: ${{ steps.branch-check.outputs.env_name }}
+  run-test:
+    need: [branch]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: peter-evans/repository-dispatch@v2
+        with:
+          event-type: run-test
+          client-payload: '{"environment": "${{ needs.branch.outputs.env_name }}"}'
   packer:
     name: Packer Build
     needs: [branch]

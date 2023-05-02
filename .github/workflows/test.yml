@@ -1,15 +1,13 @@
 name: Run Tests
 
 on:
-  workflow_run:
-    workflows: [Packer Build]
-    types:
-      - requested
+  repository_dispatch:
+    type: [run_test]
 
 jobs:
   test:
     runs-on: ubuntu-latest
-    environment: sandbox
+    environment: ${{ github.event.client_payload.environment }}
 
     steps:
       - uses: actions/checkout@v3
