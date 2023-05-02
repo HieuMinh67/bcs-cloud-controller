@@ -1,6 +1,10 @@
 name: Run Tests
 
-on: [push]
+on:
+  workflow_run:
+    workflows: [Packer Build]
+    types:
+      - requested
 
 jobs:
   test:
