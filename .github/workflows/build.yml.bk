@@ -1,0 +1,65 @@
+name: Packer Build
+
+on:
+  push:
+    branches:
+      - master
+  workflow_dispatch:
+    
+env:
+  AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+  AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+
+jobs:
+  branch:
+    name: Get branch name
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - id: branch-check
+        run: |
+          echo "Running on branch ${{ github.ref }}"
+          if [ "${{ github.ref }}" == "refs/heads/master" ]; then
+            echo "env_name=production" >> $GITHUB_OUTPUT
+          else
+             echo "env_name=sandbox" >> $GITHUB_OUTPUT
+          fi
+    outputs:
+      env_name: ${{ steps.branch-check.outputs.env_name }}
+
+  test:
+    runs-on: ubuntu-latest
+    needs: [branch]
+    environment: ${{ needs.branch.outputs.env_name }}
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: '1.20'
+
+      - name: Test
+        run: go test ./test/e2e/*
+
+  packer:
+    name: Packer Build
+    needs: [ branch, test ]
+    runs-on: ubuntu-latest
+    environment: ${{ needs.branch.outputs.env_name }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Set up Packer
+        uses: hashicorp/setup-packer@main
+        with:
+          version: '1.8.6'
+
+      - name: Packer Init
+        run: |
+          packer init packer
+
+      - name: Build Image
+        run: |
+          packer build packer
