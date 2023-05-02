@@ -34,7 +34,7 @@ jobs:
           client-payload: '{"environment": "${{ needs.branch.outputs.env_name }}"}'
   packer:
     name: Packer Build
-    needs: [run-test]
+    needs: [run-test, branch]
     runs-on: ubuntu-latest
     environment: ${{ needs.branch.outputs.env_name }}
     steps:
