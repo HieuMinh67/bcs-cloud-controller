@@ -23,16 +23,17 @@ jobs:
     outputs:
       env_name: ${{ steps.branch-check.outputs.env_name }}
   run-test:
-    need: [branch]
+    needs: [branch]
     runs-on: ubuntu-latest
     steps:
       - uses: peter-evans/repository-dispatch@v2
         with:
+          token: ${{ secrets.GH_PAT }}
           event-type: run-test
           client-payload: '{"environment": "${{ needs.branch.outputs.env_name }}"}'
   packer:
     name: Packer Build
-    needs: [branch]
+    needs: [run-test]
     runs-on: ubuntu-latest
     environment: ${{ needs.branch.outputs.env_name }}
     steps:
