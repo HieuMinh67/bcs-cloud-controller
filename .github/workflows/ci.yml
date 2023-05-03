@@ -1,9 +1,7 @@
-name: Packer Build
+name: Build - Test - Push
 
 on:
   push:
-    branches:
-      - master
   workflow_dispatch:
 
 env:
@@ -29,8 +27,7 @@ jobs:
 
   test:
     runs-on: ubuntu-latest
-    needs: [branch]
-    environment: ${{ needs.branch.outputs.env_name }}
+    environment: sandbox
     steps:
       - uses: actions/checkout@v3
 
@@ -42,8 +39,9 @@ jobs:
       - name: Test
         run: go test ./test/e2e/*
 
-  packer:
+  build:
     name: Packer Build
+    if: github.ref == 'refs/heads/master'
     needs: [ branch, test ]
     runs-on: ubuntu-latest
     environment: ${{ needs.branch.outputs.env_name }}
