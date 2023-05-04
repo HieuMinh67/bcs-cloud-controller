@@ -1,0 +1,42 @@
+name: Copy Forked Branch Workflow
+
+on:
+  workflow_dispatch:
+    inputs:
+      target-repo:
+        description: 'The target repository in the format "owner/repo".'
+        required: true
+#        default: 'your-username/your-repo'
+      target-branch:
+        description: 'The target branch to copy.'
+        required: true
+      #        default: 'forked-branch'
+      source-repo:
+        description: 'The source repository in the format "user/repo".'
+        required: true
+
+jobs:
+  copy_branch:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout target repository
+        uses: actions/checkout@v3
+        with:
+          repository: ${{ github.event.inputs.target-repo }}
+          ref: ${{ github.event.inputs.target-branch }}
+      - name: Set author identity
+        run: |
+          git config --global user.email "bot@peterbean.net"
+          git config --global user.name "BeanBot"
+#      - name: Checkout source repository
+#        uses: actions/checkout@v3
+#        with:
+#          repository: ${{ github.event.inputs.source-repo }}
+#          ref: forks/user/${{ github.event.inputs.target-branch }}
+      - name: Copy branch
+        run: |
+          parts=("${{ split(${{ github.event.inputs.target-repo }}, '/') }}")
+          
+          cd source
+          git remote add target https://github.com/${{ github.event.inputs.target-repo }}.git
+          git push target HEAD:forks/parts[0]/${{ github.event.inputs.target-branch }}
