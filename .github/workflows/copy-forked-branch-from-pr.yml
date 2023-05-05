@@ -8,7 +8,7 @@ on:
         required: true
 
 jobs:
-  copy_branch:
+  copy-branch:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
@@ -31,9 +31,6 @@ jobs:
           ref: ${{ steps.get-pr.outputs.target-br }}
           token: ${{ secrets.GH_PAT }}
 
-      - name: Fetch branch
-        run: git fetch origin ${{ steps.get-pr.outputs.target-br }}
-
       - name: Create new branch
         run: |
           NEW_BR="forks/${{ steps.get-pr.outputs.user }}/${{ steps.get-pr.outputs.target-br }}"
@@ -45,8 +42,4 @@ jobs:
           git config --global user.name "BeanBot"
 
       - name: Push new branch
-        uses: ad-m/github-push-action@master
-        with:
-          github_token: ${{ secrets.GH_PAT }}
-          branch: forks/${{ steps.get-pr.outputs.user }}/${{ steps.get-pr.outputs.target-br }}
-          force: true
+        run: git push https://${{ github.actor }}:${{ secrets.GH_PAT }}@github.com/${{ github.repository }}.git HEAD:forks/${{ steps.get-pr.outputs.user }}/${{ steps.get-pr.outputs.target-br }}
