@@ -1,0 +1,52 @@
+name: Copy Forked Branch Workflow
+
+on:
+  workflow_dispatch:
+    inputs:
+      pr-number:
+        description: The number of PR that contain the branch you want to copy
+        required: true
+
+jobs:
+  copy_branch:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+      - id: get-pr
+        name: Get Pull Request
+        env:
+          API_URL: ${{ github.api_url }}/repos/${{ github.repository }}/pulls/${{ inputs.pr-number }}
+          # https://docs.github.com/en/rest/pulls/pulls?apiVersion=2022-11-28#get-a-pull-request
+        run: |
+          PR=$(curl -s -H "Accept: application/vnd.github+json" "${{ env.API_URL }}")
+          echo "target-repo=$(echo "${PR}" | jq -r '.head.repo.full_name')" >> $GITHUB_OUTPUT
+          echo "target-br=$(echo "${PR}" | jq -r '.head.ref')" >> $GITHUB_OUTPUT
+          echo "user=$(echo "${PR}" | jq -r '.head.user.login')" >> $GITHUB_OUTPUT
+
+      - name: Checkout target repository
+        uses: actions/checkout@v3
+        with:
+          repository: ${{ steps.get-pr.outputs.target-repo }}
+          ref: ${{ steps.get-pr.outputs.target-br }}
+          token: ${{ secrets.GH_PAT }}
+
+      - name: Fetch branch
+        run: git fetch origin ${{ steps.get-pr.outputs.target-br }}
+
+      - name: Create new branch
+        run: |
+          NEW_BR="forks/${{ steps.get-pr.outputs.user }}/${{ steps.get-pr.outputs.target-br }}"
+          git checkout -b ${NEW_BR}
+
+      - name: Set author identity
+        run: |
+          git config --global user.email "bot@peterbean.net"
+          git config --global user.name "BeanBot"
+
+      - name: Push new branch
+        uses: ad-m/github-push-action@master
+        with:
+          github_token: ${{ secrets.GH_PAT }}
+          branch: forks/${{ steps.get-pr.outputs.user }}/${{ steps.get-pr.outputs.target-br }}
+          force: true
