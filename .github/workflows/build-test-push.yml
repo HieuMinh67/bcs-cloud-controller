@@ -1,0 +1,77 @@
+name: Build - Test - Push
+
+on:
+  push:
+  workflow_dispatch:
+
+env:
+  AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+  AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+  BUILD_FOLDER: ./build/packer
+
+jobs:
+  # https://www.codewrecks.com/post/github/choose-environment-from-branch/
+  # https://docs.github.com/en/actions/using-jobs/defining-outputs-for-jobs
+  branch:
+    name: Get branch name
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - id: branch-check
+        run: |
+          echo "Running on branch ${{ github.ref }}"
+          if [ "${{ github.ref }}" == "refs/heads/master" ]; then
+            echo "env_name=production" >> $GITHUB_OUTPUT
+          else
+             echo "env_name=sandbox" >> $GITHUB_OUTPUT
+          fi
+    outputs:
+      env_name: ${{ steps.branch-check.outputs.env_name }}
+
+  test:
+    name: Test
+
+
+    runs-on: ubuntu-latest
+    environment: sandbox
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: '1.20'
+
+      - name: Test
+        run: go test ./test/e2e/*
+
+  build-ami:
+    name: Build AMI
+
+    if: github.ref == 'refs/heads/master'
+    needs: [ branch, test ]
+    runs-on: ubuntu-latest
+    environment: ${{ needs.branch.outputs.env_name }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Set up Packer
+        uses: hashicorp/setup-packer@main
+        with:
+          version: '1.8.6'
+
+      - name: Packer Init
+        env:
+          PACKER_GITHUB_API_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          packer init ${{ env.BUILD_FOLDER }}
+
+      - name: Packer validate
+        id: validate
+        run: |
+          packer validate ${{ env.BUILD_FOLDER }}
+
+      - name: Build Image
+        run: |
+          packer build ${{ env.BUILD_FOLDER }}

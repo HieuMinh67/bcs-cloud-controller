@@ -3,6 +3,7 @@ package e2e
 import (
 	"fmt"
 	"github.com/aws/aws-sdk-go/aws/awserr"
+	"github.com/beancloudservices/bcs-cloud-controller/test/setup/networking"
 	"github.com/gruntwork-io/terratest/modules/logger"
 	"github.com/gruntwork-io/terratest/modules/packer"
 	test_structure "github.com/gruntwork-io/terratest/modules/test-structure"
@@ -28,6 +29,8 @@ var DefaultTimeBetweenPackerRetries = 15 * time.Second
 
 const DefaultMaxPackerRetries = 3
 
+const DefaultRegion string = "us-west-2"
+
 var log = logger.Logger{}
 
 // This is a complicated, end-to-end integration test. It builds the AMI from examples/packer-docker-example,
@@ -38,7 +41,7 @@ var log = logger.Logger{}
 func TestImageBuildForAwsUbuntuMicroK8s(t *testing.T) {
 	t.Parallel()
 	// The folder where we have our Terraform code
-	workingDir := "../../packer"
+	workingDir := "../../build/packer"
 
 	// At the end of the test, delete the AMI
 	defer test_structure.RunTestStage(t, "cleanup_ami", func() {
@@ -86,19 +89,25 @@ func buildAMI(t *testing.T, awsRegion string, workingDir string) {
 	// Some AWS regions are missing certain instance types, so pick an available type based on the region we picked
 	//instanceType := terratest_aws.GetRecommendedInstanceType(t, awsRegion, []string{"t4g.micro"})
 
+	vpc := networking.VPC{
+		TestObject: t,
+		AwsRegion:  DefaultRegion,
+	}
+	vpc.CreateDefaultVPCIfNotExists()
+
 	packerOptions := &packer.Options{
 		// The path to where the Packer template is located
-		Template: "../../packer/aws-ubuntu.pkr.hcl",
+		Template: "../../build/packer/aws-ubuntu.pkr.hcl",
 
 		// Variable file to to pass to our Packer build using -var-file option
 		VarFiles: []string{
 			//varFile.Name(),
-			"../../packer/aws-ubuntu.auto.pkrvars.hcl",
+			"../../build/packer/aws-ubuntu.auto.pkrvars.hcl",
 		},
 
 		// Environment settings to avoid plugin conflicts
 		Env: map[string]string{
-			"PACKER_PLUGIN_PATH": "../../packer/.packer.d/plugins",
+			"PACKER_PLUGIN_PATH": "../../build/packer/.packer.d/plugins",
 		},
 
 		// Only build the AWS AMI
@@ -172,7 +181,8 @@ func createEc2Instance(t *testing.T, awsRegion string, workingDir string) {
 
 	fmt.Println(vpcsRes)
 
-	var vpcId, subnetId string
+	groupName := "my-security-groupV3"
+	var vpcId, subnetId, groupId string
 	if len(vpcsRes.Vpcs) == 0 {
 		println("VPC not exist so create a new one")
 		vpcTag := &ec2.TagSpecification{
@@ -230,6 +240,79 @@ func createEc2Instance(t *testing.T, awsRegion string, workingDir string) {
 
 		//fmt.Println(vpcRes)
 		subnetId = *createSubnetRes.Subnet.SubnetId
+
+		// https://docs.aws.amazon.com/sdk-for-go/api/service/ec2/#EC2.CreateSecurityGroup
+		// https://docs.aws.amazon.com/sdk-for-go/v1/developer-guide/ec2-example-security-groups.html#create-security-group
+		sgTag := &ec2.TagSpecification{
+			ResourceType: aws.String(ec2.ResourceTypeSecurityGroup),
+			Tags: []*ec2.Tag{
+				{
+					Key:   aws.String("Name"),
+					Value: aws.String("My security group V3"),
+				},
+			},
+		}
+		sgInput := &ec2.CreateSecurityGroupInput{
+			Description:       aws.String("My security group"),
+			GroupName:         aws.String(groupName),
+			TagSpecifications: []*ec2.TagSpecification{sgTag},
+			VpcId:             aws.String(vpcId),
+		}
+
+		securityGroupRes, err := ec2Client.CreateSecurityGroup(sgInput)
+		if err != nil {
+			if awsErr, ok := err.(awserr.Error); ok {
+				switch awsErr.Code() {
+				default:
+					fmt.Println(awsErr.Error())
+				}
+			} else {
+				// Print the error, cast err to awserr.Error to get the Code and
+				// Message from an error.
+				fmt.Println(err.Error())
+			}
+			return
+		}
+
+		fmt.Println(securityGroupRes)
+		groupId = *securityGroupRes.GroupId
+
+		_, err = ec2Client.AuthorizeSecurityGroupIngress(&ec2.AuthorizeSecurityGroupIngressInput{
+			GroupId: aws.String(groupId),
+
+			IpPermissions: []*ec2.IpPermission{
+				// Can use setters to simplify seting multiple values without the
+				// needing to use aws.String or associated helper utilities.
+				(&ec2.IpPermission{}).
+					SetIpProtocol("tcp").
+					SetFromPort(80).
+					SetToPort(80).
+					SetIpRanges([]*ec2.IpRange{
+						{CidrIp: aws.String("0.0.0.0/0")},
+					}),
+				(&ec2.IpPermission{}).
+					SetIpProtocol("tcp").
+					SetFromPort(16443).
+					SetToPort(16443).
+					SetIpRanges([]*ec2.IpRange{
+						{CidrIp: aws.String("0.0.0.0/0")},
+					}),
+				(&ec2.IpPermission{}).
+					SetIpProtocol("tcp").
+					SetFromPort(22).
+					SetToPort(22).
+					SetIpRanges([]*ec2.IpRange{
+						(&ec2.IpRange{}).
+							SetCidrIp("0.0.0.0/0"),
+					}),
+			},
+		})
+		if err != nil {
+			fmt.Printf("Unable to set security group %q ingress, %v", groupName, err)
+			os.Exit(1)
+		}
+
+		fmt.Println("Successfully set security group ingress")
 	} else {
 		println("Reuse existing VPC")
 		vpcId = *vpcsRes.Vpcs[0].VpcId
@@ -261,83 +344,40 @@ func createEc2Instance(t *testing.T, awsRegion string, workingDir string) {
 		}
 
 		subnetId = *subnetsRes.Subnets[0].SubnetId
+
+		sgRes, err := ec2Client.DescribeSecurityGroups(&ec2.DescribeSecurityGroupsInput{
+			Filters: []*ec2.Filter{
+				{
+					Name: aws.String("vpc-id"),
+					Values: []*string{
+						aws.String(vpcId),
+					},
+				},
+				{
+					Name: aws.String("group-name"),
+					Values: []*string{
+						aws.String(groupName),
+					},
+				},
+			},
+		})
+		if err != nil {
+			if aerr, ok := err.(awserr.Error); ok {
+				switch aerr.Code() {
+				default:
+					fmt.Println(aerr.Error())
+				}
+			} else {
+				// Print the error, cast err to awserr.Error to get the Code and
+				// Message from an error.
+				fmt.Println(err.Error())
+			}
+			return
+		}
+		groupId = *sgRes.SecurityGroups[0].GroupId
 	}
 
 	println("VPC ID to use is " + vpcId)
-
-	// https://docs.aws.amazon.com/sdk-for-go/api/service/ec2/#EC2.CreateSecurityGroup
-	// https://docs.aws.amazon.com/sdk-for-go/v1/developer-guide/ec2-example-security-groups.html#create-security-group
-	sgTag := &ec2.TagSpecification{
-		ResourceType: aws.String(ec2.ResourceTypeSecurityGroup),
-		Tags: []*ec2.Tag{
-			{
-				Key:   aws.String("Name"),
-				Value: aws.String("My security group V3"),
-			},
-		},
-	}
-	groupName := "my-security-groupV3"
-	sgInput := &ec2.CreateSecurityGroupInput{
-		Description:       aws.String("My security group"),
-		GroupName:         aws.String(groupName),
-		TagSpecifications: []*ec2.TagSpecification{sgTag},
-		VpcId:             aws.String(vpcId),
-	}
-
-	securityGroupRes, err := ec2Client.CreateSecurityGroup(sgInput)
-	if err != nil {
-		if awsErr, ok := err.(awserr.Error); ok {
-			switch awsErr.Code() {
-			default:
-				fmt.Println(awsErr.Error())
-			}
-		} else {
-			// Print the error, cast err to awserr.Error to get the Code and
-			// Message from an error.
-			fmt.Println(err.Error())
-		}
-		return
-	}
-
-	fmt.Println(securityGroupRes)
-	groupId := *securityGroupRes.GroupId
-
-	_, err = ec2Client.AuthorizeSecurityGroupIngress(&ec2.AuthorizeSecurityGroupIngressInput{
-		GroupId: aws.String(groupId),
-
-		IpPermissions: []*ec2.IpPermission{
-			// Can use setters to simplify seting multiple values without the
-			// needing to use aws.String or associated helper utilities.
-			(&ec2.IpPermission{}).
-				SetIpProtocol("tcp").
-				SetFromPort(80).
-				SetToPort(80).
-				SetIpRanges([]*ec2.IpRange{
-					{CidrIp: aws.String("0.0.0.0/0")},
-				}),
-			(&ec2.IpPermission{}).
-				SetIpProtocol("tcp").
-				SetFromPort(16443).
-				SetToPort(16443).
-				SetIpRanges([]*ec2.IpRange{
-					{CidrIp: aws.String("0.0.0.0/0")},
-				}),
-			(&ec2.IpPermission{}).
-				SetIpProtocol("tcp").
-				SetFromPort(22).
-				SetToPort(22).
-				SetIpRanges([]*ec2.IpRange{
-					(&ec2.IpRange{}).
-						SetCidrIp("0.0.0.0/0"),
-				}),
-		},
-	})
-	if err != nil {
-		fmt.Printf("Unable to set security group %q ingress, %v", groupName, err)
-		os.Exit(1)
-	}
-
-	fmt.Println("Successfully set security group ingress")
 
 	// https://docs.aws.amazon.com/sdk-for-go/v1/developer-guide/ec2-example-create-images.html
 	instanceRes, err := ec2Client.RunInstances(
@@ -347,7 +387,7 @@ func createEc2Instance(t *testing.T, awsRegion string, workingDir string) {
 			InstanceType:     aws.String("t4g.micro"),
 			MinCount:         aws.Int64(1),
 			MaxCount:         aws.Int64(1),
-			SecurityGroupIds: []*string{securityGroupRes.GroupId},
+			SecurityGroupIds: []*string{&groupId},
 			SubnetId:         aws.String(subnetId),
 		})
 
@@ -376,8 +416,7 @@ func createEc2Instance(t *testing.T, awsRegion string, workingDir string) {
 	}
 
 	fmt.Println("Successfully tagged instance")
-	test_structure.SaveString(t, workingDir, "InstanceId", *instanceId)
-
+	test_structure.SaveString(t, workingDir, "instanceId", *instanceId)
 }
 
 // Delete the AMI
@@ -489,17 +528,17 @@ func TestImageBuild(t *testing.T) {
 
 	packerOptions := &packer.Options{
 		// The path to where the Packer template is located
-		Template: "../../packer/aws-ubuntu.pkr.hcl",
+		Template: "../../build/packer/aws-ubuntu.pkr.hcl",
 
 		// Variable file to to pass to our Packer build using -var-file option
 		VarFiles: []string{
 			//varFile.Name(),
-			"../../packer/aws-ubuntu.auto.pkrvars.hcl",
+			"../../build/packer/aws-ubuntu.auto.pkrvars.hcl",
 		},
 
 		// Environment settings to avoid plugin conflicts
 		Env: map[string]string{
-			"PACKER_PLUGIN_PATH": "../../packer/.packer.d/plugins",
+			"PACKER_PLUGIN_PATH": "../../build/packer/.packer.d/plugins",
 		},
 
 		// Only build the AWS AMI

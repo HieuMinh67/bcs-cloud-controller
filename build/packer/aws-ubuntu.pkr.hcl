@@ -85,4 +85,15 @@ build {
   sources = [
     "source.amazon-ebs.ubuntu"
   ]
+
+  provisioner "shell" {
+    inline = [
+      # fix device not yet seeded or device model not acknowledged
+      "sudo apt purge snapd -y",
+      "sudo apt autoremove -y",
+      "sudo apt install snapd -y", 
+      # https://forum.snapcraft.io/t/too-early-for-operations-solved/12243/20
+      "sudo snap install microk8s --classic",
+    ]
+  }
 }
