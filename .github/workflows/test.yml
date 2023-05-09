@@ -1,8 +1,6 @@
 name: Echo Pull Request Title and Body
 
 on:
-  pull_request_target:
-    types: [opened, reopened, synchronize]
   pull_request:
     types: [edited]
 
@@ -14,15 +12,9 @@ jobs:
         uses: actions/checkout@v3
         with:
           ref: ${{ github.event.pull_request.head.ref }}
-
-      - name: Echo Initial Title and Body
-        if: github.event_name == 'pull_request_target'
-        run: |
-          echo "Initial Title: ${{ github.event.pull_request.title }}"
-          echo "Initial Body: ${{ github.event.pull_request.body }}"
-
+          
       - name: Echo Updated Title and Body
-        if: github.event_name == 'pull_request' && github.event.changes.title || github.event.changes.body
+        if: github.event.changes.title || github.event.changes.body
         run: |
           echo "Updated Title: ${{ github.event.changes.title.from }} -> ${{ github.event.pull_request.title }}"
           echo "Updated Body: ${{ github.event.changes.body.from }} -> ${{ github.event.pull_request.body }}"
