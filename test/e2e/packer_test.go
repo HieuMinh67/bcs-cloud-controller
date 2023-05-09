@@ -442,6 +442,7 @@ func fetchSyslogForInstance(t *testing.T, awsRegion string, workingDir string) {
 }
 
 // Validate Kubernetes has been deployed and is working
+// Validate Kubernetes has been deployed and is working
 func validateInstanceRunningKubernetes(t *testing.T, awsRegion string, workingDir string) {
 	// Load the Terraform Options saved by the earlier deploy_terraform stage
 	//terraformOptions := test_structure.LoadTerraformOptions(t, workingDir)
