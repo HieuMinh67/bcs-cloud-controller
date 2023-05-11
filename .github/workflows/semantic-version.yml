@@ -16,7 +16,7 @@ jobs:
         run: |
           PR_TITLE=$(jq -r '.pull_request.title' $GITHUB_EVENT_PATH)
           PR_BODY=$(jq -r '.pull_request.body' $GITHUB_EVENT_PATH)
-          SEMVER_REGEX=\+semver:(major|minor|patch|pre|build)
+          SEMVER_REGEX="\+semver:(major|minor|patch|pre|build)"
 
           if ! [[ "$PR_TITLE" =~ SEMVER_REGEX ]] || [[ "$PR_BODY" =~ SEMVER_REGEX ]]; then
             exit 1
