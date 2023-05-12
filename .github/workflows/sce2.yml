@@ -2,7 +2,8 @@ name: Check and Increment Version on Merge
 
 on:
   pull_request:
-    - synchronize
+    types:
+      - synchronize
 
 jobs:
   print-version:
