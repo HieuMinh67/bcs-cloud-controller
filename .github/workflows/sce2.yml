@@ -1,6 +1,6 @@
 name: Check and Increment Version on Merge
 
-on: [push]
+on: [push, workflow_dispatch]
 
 jobs:
   print-version:
