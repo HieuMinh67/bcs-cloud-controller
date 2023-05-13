@@ -1,9 +1,6 @@
 name: Check and Increment Version on Merge
 
-on:
-  pull_request:
-    types:
-      - synchronize
+on: [push]
 
 jobs:
   print-version:
@@ -17,6 +14,7 @@ jobs:
           TARGETED_BRANCH=$(jq -r '.pull_request.base.ref' $GITHUB_EVENT_PATH)
           cat $GITHUB_EVENT_PATH
           echo $TARGETED_BRANCH
+          echo ${{ github.event }}
           if [[ TARGETED_BRANCH == "master" ]]; then
             echo "$(git describe --abbrev=0 --tags)"
           elif [[ TARGETED_BRANCH =~ ^release\/v[0-9]+\.[0-9]+$ ]]; then
