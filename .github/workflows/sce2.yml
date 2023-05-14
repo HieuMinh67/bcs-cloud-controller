@@ -17,7 +17,7 @@ jobs:
         run: |
           echo ${{ github.event.pull_request.base.ref }}
           if [[ ${{ github.event.pull_request.base.ref }} == "master" ]]; then
-            git fetch --prune --unshallow --tags
+            git fetch --unshallow --tags
             git describe --abbrev=0 --tags
           elif [[ ${{ github.event.pull_request.base.ref }} =~ ^release\/v[0-9]+\.[0-9]+$ ]]; then
             git fetch --tags
