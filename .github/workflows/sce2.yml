@@ -37,12 +37,12 @@ jobs:
       - name: Update latest tag
         id: update_tag
         run: |
-#          SEMVER_REGEX="\+semver:(major|minor|patch|pre|build)"
-#          if [[ ${{ github.event.pull_request.title }} =~ $SEMVER_REGEX ]]; then
-#            SEMVER_TYPE=${BASH_REMATCH[1]}
-#          elif [[ ${{ github.event.pull_request.body }} =~ $SEMVER_REGEX ]]; then
-#            SEMVER_TYPE=${BASH_REMATCH[1]}
-#          fi
+          SEMVER_REGEX="\+semver:(major|minor|patch|pre|build)"
+          if [[ ${{ github.event.pull_request.title }} =~ $SEMVER_REGEX ]]; then
+            SEMVER_TYPE=${BASH_REMATCH[1]}
+          elif [[ ${{ github.event.pull_request.body }} =~ $SEMVER_REGEX ]]; then
+            SEMVER_TYPE=${BASH_REMATCH[1]}
+          fi
           case "v1.0.0-alpha+100" in
           
             "+semver:major")
