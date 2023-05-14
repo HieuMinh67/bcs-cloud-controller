@@ -43,6 +43,7 @@ jobs:
           elif [[ "${{ github.event.pull_request.body }}" =~ $SEMVER_REGEX ]]; then
             SEMVER_TYPE=${BASH_REMATCH[1]}
           fi
+          echo $SEMVER_TYPE
           case $SEMVER_TYPE in
 
             "+semver:major")
