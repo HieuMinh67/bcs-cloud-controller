@@ -18,7 +18,7 @@ jobs:
           echo ${{ github.event.pull_request.base.ref }}
           git fetch --tags
           if [[ ${{ github.event.pull_request.base.ref }} == "master" ]]; then
-            git describe --abbrev=0 --tags --always
+            git describe --abbrev=0 --tags
           elif [[ ${{ github.event.pull_request.base.ref }} =~ ^release\/v[0-9]+\.[0-9]+$ ]]; then
             git describe --abbrev=0 --tags ${{ steps.get-branch.outputs.branch }}
           fi
