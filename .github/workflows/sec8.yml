@@ -1,0 +1,40 @@
+name: Create Pre-release or Build Tag
+
+on:
+  pull_request:
+    types: [closed]
+    branches:
+      - master
+
+jobs:
+  create_release_tag:
+    runs-on: ubuntu-latest
+    if: github.event.pull_request.merged == true
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v2
+
+      - name: Extract Version Number and Release Type
+        id: version
+        run: |
+          version=$(echo "${{ github.event.pull_request.title }} ${{ github.event.pull_request.body }}" | grep -Eo '[0-9]+\.[0-9]+\.[0-9]+' || true)
+          prerelease=$(echo "${{ github.event.pull_request.title }} ${{ github.event.pull_request.body }}" | grep -Eo '-(alpha|beta|rc)[.0-9]*' || true)
+          if [[ $prerelease ]]; then
+            prerelease=${prerelease#-}
+            echo "::set-output name=version::$version-$prerelease"
+            echo "::set-output name=prerelease::$prerelease"
+          else
+            echo "::set-output name=version::$version"
+          fi
+
+      - name: Create Tag
+        if: steps.version.outputs.version != ''
+        run: |
+          version=${{ steps.version.outputs.version }}
+          prerelease=${{ steps.version.outputs.prerelease }}
+          if [[ $prerelease ]]; then
+            git tag -a $version -m "Pre-release $version" --annotate --force --message "Pre-release $version"
+          else
+            git tag -a $version -m "Build $version" --annotate --force --message "Build $version"
+          fi
+          git push origin $version

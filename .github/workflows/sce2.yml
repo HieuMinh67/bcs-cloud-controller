@@ -1,0 +1,75 @@
+name: Check and Increment Version on Merge
+
+on:
+  pull_request:
+    types:
+      - synchronize
+
+
+jobs:
+  print-version:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Get tag
+        id: get-tag
+        run: |
+          echo ${{ github.event.pull_request.base.ref }}
+          git fetch --unshallow --tags
+          if [[ ${{ github.event.pull_request.base.ref }} == "master" ]]; then
+            TAG=$(git describe --abbrev=0 --tags)
+          elif [[ ${{ github.event.pull_request.base.ref }} =~ ^release\/v[0-9]+\.[0-9]+$ ]]; then
+            RELEASE_VERSION=$(echo ${{ github.event.pull_request.base.ref }} | cut -d '/' -f 2)
+            echo $RELEASE_VERSION
+            TAG=$(git describe --abbrev=0 --tags --match $RELEASE_VERSION*)
+          fi
+          echo "tag=$TAG" >> $GITHUB_OUTPUT
+      - name: Update latest tag
+        id: update_tag
+        run: |
+          SEMVER_REGEX="\+semver:(major|minor|patch|pre|build)"
+          if [[ "${{ github.event.pull_request.title }}" =~ $SEMVER_REGEX ]]; then
+            SEMVER_TYPE=${BASH_REMATCH[1]}
+          elif [[ "${{ github.event.pull_request.body }}" =~ $SEMVER_REGEX ]]; then
+            SEMVER_TYPE=${BASH_REMATCH[1]}
+          fi
+          
+          components=$(echo ${{ steps.get-tag.outputs.tag }} | sed 's/v//; s/-.*//')
+          echo "Test component: "$component
+          major=$(echo $components | cut -d '.' -f 1)
+          minor=$(echo $components | cut -d '.' -f 2)
+          patch=$(echo $components | cut -d '.' -f 3)
+          pre=$(echo ${{ steps.get-tag.outputs.tag }}  | sed 's/.*-\(.*\)+.*/\1/')
+          echo "Pre: "$pre
+          case $SEMVER_TYPE in
+          
+            "major")
+              new_tag="v$((major+1)).0.0-alpha+${{ github.run_number }}"
+              ;;
+          
+            "minor")
+              new_tag="v$major.$((minor+1)).0-alpha+${{ github.run_number }}"
+              ;;
+          
+            "patch")
+              new_tag="v$major.$minor.$((patch+1))-alpha+${{ github.run_number }}"
+              ;;
+          
+            "build")
+              new_tag="v$major.$minor.$patch-alpha+${{ github.run_number }}"
+              ;;
+            "pre")
+              pre=$(echo "${{ github.event.pull_request.title }}" | sed -n 's/^.*+semver:pre-\([^ ]*\).*$/\1/p')
+              case $pre in
+                alpha)
+                  new_tag="v$major.$minor.$patch-beta+${{ github.run_number }}"
+                  ;;
+                *)
+                  new_tag="v$major.$minor.$patch-rc+${{ github.run_number }}"
+                  ;;
+              esac
+          esac
+          echo $(echo "$new_tag" | sed "s/alpha/$pre/")
+          echo $new_tag
