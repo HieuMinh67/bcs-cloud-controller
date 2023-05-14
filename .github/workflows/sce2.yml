@@ -64,13 +64,13 @@ jobs:
               pre=$(echo "${{ github.event.pull_request.title }}" | sed -n 's/^.*+semver:pre-\([^ ]*\).*$/\1/p')
               case $pre in
                 alpha)
-                  new_tag=$(echo "${{ latest_tag }}" | sed "s/alpha/${{ pre }}/")
+                  new_tag=$(echo "${{ steps.get-tag.outputs.tag }}" | sed "s/alpha/${{ pre }}/")
                   ;;
                 beta)
-                  new_tag=$(echo "${{ latest_tag }}" | sed "s/beta/${{ pre }}/")
+                  new_tag=$(echo "${{ steps.get-tag.outputs.tag }}" | sed "s/beta/${{ pre }}/")
                   ;;
                 rc)
-                  new_tag=$(echo "${{ latest_tag }}" | sed "s/rc/${{ pre }}/")
+                  new_tag=$(echo "${{ steps.get-tag.outputs.tag }}" | sed "s/rc/${{ pre }}/")
                   ;;
 
           esac
