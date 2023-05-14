@@ -1,0 +1,33 @@
+#name: Check Patch Version Compatibility
+#
+#on:
+#  pull_request:
+#    types: [opened, edited, reopened, synchronize]
+#
+#jobs:
+#  check_patch_version:
+#    runs-on: ubuntu-latest
+#    steps:
+#      - name: Checkout Code
+#        uses: actions/checkout@v2
+#
+#      - name: Extract Patch Version
+#        id: patch_version
+#        run: |
+#          patch_version=$(echo "${{ github.event.pull_request.title }} ${{ github.event.pull_request.body }}" | grep -Eo '[0-9]+\.[0-9]+\.[0-9]+$' || true)
+#          echo "::set-output name=patch_version::$patch_version"
+#
+#      - name: Get Major and Minor Release Version
+#        id: release_version
+#        run: |
+#          release_version=$(echo "${{ github.ref }}" | grep -Eo '[0-9]+\.[0-9]+')
+#          echo "::set-output name=release_version::$release_version"
+#
+#      - name: Check Compatibility
+#        run: |
+#          patch_version=${{ steps.patch_version.outputs.patch_version }}
+#          release_version=${{ steps.release_version.outputs.release_version }}
+#          if [ -n "$patch_version" ] && [ "$release_version" != "$patch_version" ]; then
+#            echo "Patch version $patch_version is not compatible with release version $release_version."
+#            exit 1
+#          fi

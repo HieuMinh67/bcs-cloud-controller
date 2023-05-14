@@ -1,0 +1,24 @@
+#name: Check Semantic Version Removal
+#
+#on:
+#  pull_request:
+#    types: [edited]
+#env:
+#  SEMVER_REGEX: \+semver:(major|minor|patch|pre|build)
+#jobs:
+#  check_version_removal:
+#    runs-on: ubuntu-latest
+#    steps:
+#      - name: Checkout code
+#        uses: actions/checkout@v3
+#
+#      - name: Check version removal
+#        run: |
+#          # Extract the semantic version from the pull request title or body
+#          version=$(echo "${{ github.event.pull_request.title }}${{ github.event.pull_request.body }}" | grep -oE "\bv[0-9]+\.[0-9]+\.[0-9]+\b")
+#
+#          # Check if the semantic version is being removed or not
+#          if [[ -n "${{ version }}" && "${{ github.event.pull_request.title }}${{ github.event.pull_request.body }}" != *"${{ version }}"* ]]; then
+#            echo "Semantic version ${{ version }} is being removed"
+#            exit 1
+#          fi
