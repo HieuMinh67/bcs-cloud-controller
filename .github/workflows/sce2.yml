@@ -26,14 +26,6 @@ jobs:
             TAG=$(git describe --abbrev=0 --tags --match $RELEASE_VERSION*)
           fi
           echo "tag=$TAG" >> $GITHUB_OUTPUT
-      - name: Get version components
-        id: version_components
-        run: |
-          echo ${{ steps.get-tag.outputs.tag }}
-          components=$(echo ${{ steps.get-tag.outputs.tag }} | sed 's/v//; s/-.*//')
-          major=$(echo $components | cut -d '.' -f 1)
-          minor=$(echo $components | cut -d '.' -f 2)
-          patch=$(echo $components | cut -d '.' -f 3)
 
       - name: Update latest tag
         id: update_tag
@@ -44,6 +36,14 @@ jobs:
           elif [[ ${{ github.event.pull_request.body }} =~ $SEMVER_REGEX ]]; then
             SEMVER_TYPE=${BASH_REMATCH[1]}
           fi
+          
+          
+          echo ${{ steps.get-tag.outputs.tag }}
+          components=$(echo ${{ steps.get-tag.outputs.tag }} | sed 's/v//; s/-.*//')
+          major=$(echo $components | cut -d '.' -f 1)
+          minor=$(echo $components | cut -d '.' -f 2)
+          patch=$(echo $components | cut -d '.' -f 3)
+          
           case "$SEMVER_TYPE" in
           
             "+semver:major")
