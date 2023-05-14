@@ -13,13 +13,51 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v3
 
-      - name: Print version
+      - name: Get tag
         run: |
           echo ${{ github.event.pull_request.base.ref }}
+          git fetch --unshallow --tags
           if [[ ${{ github.event.pull_request.base.ref }} == "master" ]]; then
-            git fetch --unshallow --tags
             git describe --abbrev=0 --tags
           elif [[ ${{ github.event.pull_request.base.ref }} =~ ^release\/v[0-9]+\.[0-9]+$ ]]; then
-            git fetch --tags
-            git describe --abbrev=0 --tags ${{ steps.get-branch.outputs.branch }}
+            RELEASE_VERSION=major=$(echo ${{ github.event.pull_request.base.ref }} | cut -d '/' -f 2)
+            echo $RELEASE_VERSION
+            git describe --abbrev=0 --tags --match $RELEASE_VERSION
           fi
+#      - name: Get version components
+#        id: version_components
+#        run: |
+#          components=$(echo ${{ steps.latest_tag.outputs.tag }} | sed 's/v//; s/-.*//')
+#          major=$(echo $components | cut -d '.' -f 1)
+#          minor=$(echo $components | cut -d '.' -f 2)
+#          patch=$(echo $components | cut -d '.' -f 3)
+#
+#      - name: Update latest tag
+#        id: update_tag
+#        run: |
+#          case "${{ github.event.pull_request.title }}" in
+#            *"+semver:major"*)
+#              new_tag="v$((major+1)).0.0-alpha+${{ github.run_number }}"
+#              ;;
+#            *"+semver:minor"*)
+#              new_tag="v${{ major }}.$((minor+1)).0-alpha+${{ github.run_number }}"
+#              ;;
+#            *"+semver:patch"*)
+#              if [[ "${{ github.event.pull_request.base.ref }}" == release-* ]]; then
+#                latest_tag=$(git tag --list "v${{ major }}.${{ minor }}.*-alpha*" | sort -Vr | head -n1)
+#              fi
+#              patch_pre_build=$(echo "${{ latest_tag }}" | sed 's/.*-//')
+#              new_tag="v${{ major }}.${{ minor }}.$((patch+1))-alpha+${{ patch_pre_build+1 }}"
+#              ;;
+#            *"+semver:pre"*)
+#              pre=$(echo "${{ github.event.pull_request.title }}" | sed -n 's/^.*+semver:pre-\([^ ]*\).*$/\1/p')
+#              case "${{ latest_tag }}" in
+#                *-alpha*)
+#                  new_tag=$(echo "${{ latest_tag }}" | sed "s/-alpha/-${{ pre }}/")
+#                  ;;
+#                *-beta*)
+#                  new_tag=$(echo "${{ latest_tag }}" | sed "s/-beta/-${{ pre }}/")
+#                  ;;
+#                *-rc*)
+#                  new_tag=$(echo "${{ latest_tag }}" | sed "s/-rc/-${{ pre }}/")
+#                  ;;
