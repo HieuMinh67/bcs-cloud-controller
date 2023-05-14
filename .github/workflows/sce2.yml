@@ -73,4 +73,6 @@ jobs:
                 *-rc*)
                   new_tag=$(echo "${{ latest_tag }}" | sed "s/-rc/-${{ pre }}/")
                   ;;
+              esac
+          esac
           echo $new_tag
