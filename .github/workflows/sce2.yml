@@ -34,8 +34,6 @@ jobs:
           major=$(echo $components | cut -d '.' -f 1)
           minor=$(echo $components | cut -d '.' -f 2)
           patch=$(echo $components | cut -d '.' -f 3)
-          echo $major
-
       - name: Update latest tag
         id: update_tag
         run: |
