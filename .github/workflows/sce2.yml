@@ -37,11 +37,12 @@ jobs:
           fi
           
           components=$(echo ${{ steps.get-tag.outputs.tag }} | sed 's/v//; s/-.*//')
-          echo $component
+          echo "Test component: "$component
           major=$(echo $components | cut -d '.' -f 1)
           minor=$(echo $components | cut -d '.' -f 2)
           patch=$(echo $components | cut -d '.' -f 3)
-          
+          pre=$(echo ${{ steps.get-tag.outputs.tag }}  | sed 's/.*-\(.*\)+.*/\1/')
+          echo "Pre: "$pre
           case $SEMVER_TYPE in
           
             "major")
@@ -55,6 +56,22 @@ jobs:
             "patch")
               new_tag="v$major.$minor.$((patch+1))-alpha+${{ github.run_number }}"
               ;;
+          
+            "build")
+              new_tag="v$major.$minor.$patch-alpha+${{ github.run_number }}"
+              ;;
+            "pre")
+              pre=$(echo "${{ github.event.pull_request.title }}" | sed -n 's/^.*+semver:pre-\([^ ]*\).*$/\1/p')
+              case $pre in
+                alpha)
+                  new_tag=$(echo "${{ latest_tag }}" | sed "s/alpha/${{ pre }}/")
+                  ;;
+                beta)
+                  new_tag=$(echo "${{ latest_tag }}" | sed "s/beta/${{ pre }}/")
+                  ;;
+                rc)
+                  new_tag=$(echo "${{ latest_tag }}" | sed "s/rc/${{ pre }}/")
+                  ;;
 
           esac
           echo $new_tag
