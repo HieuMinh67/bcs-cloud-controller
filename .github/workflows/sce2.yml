@@ -64,13 +64,10 @@ jobs:
               pre=$(echo "${{ github.event.pull_request.title }}" | sed -n 's/^.*+semver:pre-\([^ ]*\).*$/\1/p')
               case $pre in
                 alpha)
-                  new_tag=$(echo "${{ steps.get-tag.outputs.tag }}" | sed "s/alpha/$pre/")
+                  new_tag="v$major.$minor.$patch-beta+${{ github.run_number }}"
                   ;;
-                beta)
-                  new_tag=$(echo "${{ steps.get-tag.outputs.tag }}" | sed "s/beta/$pre/")
-                  ;;
-                rc)
-                  new_tag=$(echo "${{ steps.get-tag.outputs.tag }}" | sed "s/rc/$pre/")
+                *)
+                  new_tag="v$major.$minor.$patch-rc+${{ github.run_number }}"
                   ;;
               esac
           esac
