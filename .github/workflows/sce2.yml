@@ -53,7 +53,7 @@ jobs:
               ;;
           
             "patch")
-              new_tag="v${{ major }}.${{ minor }}.$((patch+1))-alpha+${{ github.run_number }}"
+              new_tag="v$major.$minor.$((patch+1))-alpha+${{ github.run_number }}"
               ;;
 
           esac
