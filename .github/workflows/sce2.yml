@@ -14,23 +14,27 @@ jobs:
         uses: actions/checkout@v3
 
       - name: Get tag
+        id: get-tag
         run: |
           echo ${{ github.event.pull_request.base.ref }}
           git fetch --unshallow --tags
           if [[ ${{ github.event.pull_request.base.ref }} == "master" ]]; then
-            git describe --abbrev=0 --tags
+            TAG=$(git describe --abbrev=0 --tags)
           elif [[ ${{ github.event.pull_request.base.ref }} =~ ^release\/v[0-9]+\.[0-9]+$ ]]; then
             RELEASE_VERSION=$(echo ${{ github.event.pull_request.base.ref }} | cut -d '/' -f 2)
-            echo $RELEASE_VERSION
-            git describe --abbrev=0 --tags --match $RELEASE_VERSION
+            TAG=$(git describe --abbrev=0 --tags --match $RELEASE_VERSION)
           fi
-#      - name: Get version components
-#        id: version_components
-#        run: |
-#          components=$(echo ${{ steps.latest_tag.outputs.tag }} | sed 's/v//; s/-.*//')
-#          major=$(echo $components | cut -d '.' -f 1)
-#          minor=$(echo $components | cut -d '.' -f 2)
-#          patch=$(echo $components | cut -d '.' -f 3)
+          echo "tag=$TAG" >> $GITHUB_OUTPUT
+      - name: Get version components
+        id: version_components
+        run: |
+          components=$(echo ${{ steps.get-tag.outputs.tag }} | sed 's/v//; s/-.*//')
+          major=$(echo $components | cut -d '.' -f 1)
+          minor=$(echo $components | cut -d '.' -f 2)
+          patch=$(echo $components | cut -d '.' -f 3)
+          echo $major
+          echo $minor
+          echo $patch
 #
 #      - name: Update latest tag
 #        id: update_tag
