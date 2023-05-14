@@ -45,13 +45,13 @@ jobs:
           fi
           echo $SEMVER_TYPE
           case $SEMVER_TYPE in
-
+          
             "major")
-              new_tag="v$((major+1)).0.0-alpha+${{ github.run_number }}"
+              echo $SEMVER_TYPE
               ;;
-
+          
             "minor")
-              new_tag="v${{ major }}.$((minor+1)).0-alpha+${{ github.run_number }}"
+              echo $SEMVER_TYPE
               ;;
 
             "patch")
