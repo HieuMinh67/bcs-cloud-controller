@@ -72,6 +72,7 @@ jobs:
                 rc)
                   new_tag=$(echo "${{ steps.get-tag.outputs.tag }}" | sed "s/rc/$pre/")
                   ;;
-
+              esac
           esac
+          echo $(echo "$new_tag" | sed "s/alpha/$pre/")
           echo $new_tag
