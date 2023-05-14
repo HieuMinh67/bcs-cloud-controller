@@ -53,6 +53,14 @@ jobs:
             "minor")
               echo $SEMVER_TYPE
               ;;
-              esac
+
+            "patch")
+              if [[ "${{ github.event.pull_request.base.ref }}" == release-* ]]; then
+                latest_tag=$(git tag --list "v${{ major }}.${{ minor }}.*-alpha*" | sort -Vr | head -n1)
+              fi
+              patch_pre_build=$(echo "${{ latest_tag }}" | sed 's/.*-//')
+              new_tag="v${{ major }}.${{ minor }}.$((patch+1))-alpha+${{ patch_pre_build+1 }}"
+              ;;
+
           esac
           echo $new_tag
